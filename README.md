@@ -40,70 +40,53 @@ The tool handles various input formats and provides clear error messages when th
 The tool follows a complete certificate management lifecycle:
 
 ```mermaid
-graph TD
-    A[Infrastructure Discovery] --> B[Certificate Monitoring]
+graph LR
+    subgraph Monitor
+        A[Scan Infrastructure] --> B[Check Certificates]
+        B --> C{Days Until Expiry}
+    end
     
-    B --> C{Certificate Status}
-    C -->|Valid| D[Schedule Next Check]
-    C -->|Warning 30 days| E[Send Alert]
-    C -->|Critical 7 days| F[Urgent Alert]
-    C -->|Expired| G[Emergency Alert]
+    subgraph Alert
+        C -->|30+ days| D[OK - Schedule Next Check]
+        C -->|7-30 days| E[Warning Alert]
+        C -->|0-7 days| F[Critical Alert]
+        C -->|Expired| G[Emergency Alert]
+    end
     
-    E --> H[Renewal Decision]
-    F --> H
-    G --> H
+    subgraph Renew
+        E --> H[Trigger Renewal]
+        F --> H
+        G --> H
+        H --> I[Let's Encrypt]
+        H --> J[Commercial CA API]
+        H --> K[Manual Process]
+    end
     
-    H --> I{Renewal Method}
-    I -->|Let's Encrypt| J[Automated Renewal]
-    I -->|Commercial CA| K[API-Based Renewal]
-    I -->|Manual Process| L[Workflow Support]
+    subgraph Deploy
+        I --> L[New Certificate]
+        J --> L
+        K --> L
+        L --> M[AWS/GCP/Azure]
+        L --> N[On-Premise Servers]
+        L --> O[CDN/Load Balancers]
+    end
     
-    J --> M[Certificate Obtained]
-    K --> M
-    L --> M
+    subgraph Track
+        M --> P[Verify Deployment]
+        N --> P
+        O --> P
+        P --> Q[Update Database]
+        Q --> R[Compliance Report]
+    end
     
-    M --> N{Deployment Targets}
-    N -->|AWS| O[CloudFront/ALB]
-    N -->|GCP| P[Load Balancer]
-    N -->|Azure| Q[Application Gateway]
-    N -->|On-Premise| R[Web Servers]
-    N -->|CDN| S[Content Delivery]
-    
-    O --> T[Verify Deployment]
-    P --> T
-    Q --> T
-    R --> T
-    S --> T
-    
-    T --> U[Update Certificate Database]
-    U --> V[Generate Compliance Report]
-    V --> W[Archive Old Certificate]
-    W --> D
-    
+    R --> D
     D --> B
-    
-    subgraph "Alert Channels"
-        E --> E1[Email]
-        F --> F1[Slack/Teams]
-        G --> G1[PagerDuty/SMS]
-        E --> E2[Dashboard]
-        F --> E2
-        G --> E2
-    end
-    
-    subgraph "Tracking & Compliance"
-        U --> U1[Certificate History]
-        V --> V1[Audit Logs]
-        W --> W1[Retention Policy]
-        U1 --> U2[Expiry Trends]
-        V1 --> V2[Compliance Status]
-    end
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
-    style J fill:#e8f5e8
-    style T fill:#fff3e0
-    style V fill:#fce4ec
+    style I fill:#e8f5e8
+    style P fill:#fff3e0
+    style R fill:#fce4ec
 ```
 
 This diagram shows the five core phases: Monitor → Alert → Renew → Deploy → Track, with supporting systems for notifications and compliance.
