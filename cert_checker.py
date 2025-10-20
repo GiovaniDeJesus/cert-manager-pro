@@ -1,3 +1,5 @@
+#version 1.0
+
 from datetime import datetime, UTC
 import socket, ssl, sys, argparse
 
@@ -12,12 +14,12 @@ def clean_hostname(hostname):
     
     return hostname
 
-def get_cert_data(hostname, port):
+def get_cert_data(hostname, port, timeout=15):
     """Retrieves SSL certificate and calculates time until expiry."""
     try:
         port = int(port)
-        context = ssl.create_default_context()   
-        with socket.create_connection((hostname, port), timeout=10) as sock:
+        context = ssl.create_default_context()
+        with socket.create_connection((hostname, port), timeout=timeout) as sock:
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                 cert = ssock.getpeercert()
         return cal_date(cert)
@@ -66,6 +68,8 @@ def parse_arguments():
     parser.add_argument('port', nargs='?', type=int, default=443, help='Port number (default: 443)')
     parser.add_argument('--domains', help='Comma-separated list of domains to check')
     parser.add_argument('--port', dest='port_flag', type=int, help='Port for all domains')
+    parser.add_argument('--timeout', type=int, help='Socket timeout in seconds (default: 15)')
+    parser.add_argument('--version', action='version', version='cert_checker 1.0')
     
     return parser.parse_args()
 
@@ -80,7 +84,9 @@ if __name__ == "__main__":
     if not (1 <= port <= 65535):
         print("Error: Port must be between 1 and 65535")
         sys.exit(1)
-    
+        
+    # Set socket timeout
+    timeout = args.timeout 
     # Determine which domains to check
     if args.domains:
         # Multiple domains mode
@@ -95,7 +101,7 @@ if __name__ == "__main__":
     
     for domain in domains:
         clean_host = clean_hostname(domain)
-        result = get_cert_data(clean_host, str(port))
+        result = get_cert_data(clean_host, int(port), timeout)
         
         if result is not None:
             print(f"{domain}: {result}")
