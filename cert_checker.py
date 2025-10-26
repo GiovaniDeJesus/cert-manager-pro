@@ -1,7 +1,7 @@
 #version 1.0
 
 from datetime import datetime, UTC
-import socket, ssl, sys, argparse
+import socket, ssl, sys, argparse, yaml
 
 
 def clean_hostname(hostname):
@@ -68,14 +68,42 @@ def parse_arguments():
     parser.add_argument('port', nargs='?', type=int, default=443, help='Port number (default: 443)')
     parser.add_argument('--domains', help='Comma-separated list of domains to check')
     parser.add_argument('--port', dest='port_flag', type=int, help='Port for all domains')
+    parser.add_argument('--config', help='Path to configuration YAML file')
     parser.add_argument('--timeout', type=int, help='Socket timeout in seconds (default: 15)')
     parser.add_argument('--version', action='version', version='cert_checker 1.0')
     
     return parser.parse_args()
 
+def loadconfig(configfile):
+    '''Load configuration from a YAML file'''
+    try:
+        with open(configfile, 'r') as stream:
+            config = yaml.safe_load(stream)
+    except FileNotFoundError:
+        print(f"Error: Configuration file {configfile} not found.")
+        sys.exit(1)
+    except (yaml.YAMLError) as exc:
+        print ("Error in configuration file:", exc)
+        sys.exit(1)
+    return config
+
+
 
 if __name__ == "__main__":
     args = parse_arguments()
+    
+    #if config file is provided load it and override other arguments
+    if args.config:
+        config = loadconfig(args.config)
+        for domain in config['domains']:
+            hostname = domain['hostname']
+            port = domain.get('port', config.get('default_port'))
+            timeout = args.timeout if args.timeout else 15
+            clean_host = clean_hostname(hostname)
+            result = get_cert_data(clean_host, int(port), timeout)
+            if result is not None:
+                print(f"{hostname}: {result}")
+        sys.exit(0)
     
     # Determine port to use
     port = args.port_flag if args.port_flag else args.port
@@ -103,6 +131,6 @@ if __name__ == "__main__":
         clean_host = clean_hostname(domain)
         result = get_cert_data(clean_host, int(port), timeout)
         
-        if result is not None:
+        if result is not None: #If there is not errors it will print the result
             print(f"{domain}: {result}")
 
