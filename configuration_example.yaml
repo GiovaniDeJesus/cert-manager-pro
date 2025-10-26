@@ -1,0 +1,7 @@
+domains:
+  - hostname: google.com
+    port: 443
+  - hostname: github.com
+    port: 443
+
+default_port: 443
