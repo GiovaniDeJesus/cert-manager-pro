@@ -87,14 +87,11 @@ def loadconfig(configfile):
         sys.exit(1)
     return config
 
-
-
-if __name__ == "__main__":
-    args = parse_arguments()
-    
-    #if config file is provided load it and override other arguments
-    if args.config:
+def result_formatter(config):
+     
         config = loadconfig(args.config)
+        domains_results = {}
+        list_results = []
         for domain in config['domains']:
             hostname = domain['hostname']
             port = domain.get('port', config.get('default_port'))
@@ -102,9 +99,25 @@ if __name__ == "__main__":
             clean_host = clean_hostname(hostname)
             result = get_cert_data(clean_host, int(port), timeout)
             if result is not None:
-                print(f"{hostname}: {result}")
-        sys.exit(0)
+                domains_results = {
+                    "hostname": hostname,
+                    "port": port,
+                    "days_until_expiry": result.days,
+                    "seconds_until_expiry": result.total_seconds()
+                }
+                list_results.append(domains_results)
+                print(list_results)
+                
     
+
+if __name__ == "__main__":
+    
+    args = parse_arguments()
+    
+    # If config file is provided, use it
+    if args.config:
+        result_formatter(args.config)
+        sys.exit(0)    
     # Determine port to use
     port = args.port_flag if args.port_flag else args.port
     
