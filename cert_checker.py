@@ -50,7 +50,10 @@ def cal_date(cert):
     expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
     now = datetime.now(UTC)
     delta = expiry.replace(tzinfo=UTC) - now
-    return delta
+    return {
+            'days_remaining': delta.days,
+            'expiry_date': expiry.strftime('%Y-%m-%d')  # Format as string
+    }
 
 
 
@@ -102,14 +105,13 @@ def result_formatter(config):
                 domains_results = {
                     "hostname": hostname,
                     "port": port,
-                    "days_until_expiry": result.days,
-                    "seconds_until_expiry": result.total_seconds()
+                    "days_remaining": result["days_remaining"],
+                    "expire_dates": result["expiry_date"]
                 }
                 list_results.append(domains_results)
                 print(list_results)
                 
     
-
 if __name__ == "__main__":
     
     args = parse_arguments()
@@ -145,5 +147,5 @@ if __name__ == "__main__":
         result = get_cert_data(clean_host, int(port), timeout)
         
         if result is not None: #If there is not errors it will print the result
-            print(f"{domain}: {result}")
-
+            print(f"{domain}: {result['days_remaining']}")
+        
