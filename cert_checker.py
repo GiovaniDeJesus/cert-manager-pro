@@ -94,17 +94,40 @@ def collect_results(config, timeout):
             hostname = domain['hostname']
             port = domain.get('port', config.get('default_port'))
             clean_host = clean_hostname(hostname)
-            cert_data = get_cert(clean_host, int(port), timeout)
+            
+            try:
+                cert_data = get_cert(clean_host, int(port), timeout)
 
-            result.append({
-                "hostname": clean_host,
-                "port": port,
-                "days_remaining": cert_data["days_remaining"],
-                "issuer_name": cert_data["issuer_name"],
-                "expire_date": cert_data["expiry_date"],
-                "error_message": None
-            })
-            print(result)
+                result.append({
+                    "hostname": clean_host,
+                    "port": port,
+                    "days_remaining": cert_data["days_remaining"],
+                    "issuer_name": cert_data["issuer_name"],
+                    "expire_date": cert_data["expiry_date"],
+                    "error_message": None
+                })
+            except (ssl.SSLError, socket.gaierror, ConnectionRefusedError, TimeoutError) as e:
+                    error_msg = str(e).lower()
+                    if 'expired' in error_msg or 'certificate has expired' in error_msg:
+                        result.append({
+                            "hostname": clean_host,
+                            "port": port,
+                            "days_remaining": "expired",
+                            "issuer_name": None,
+                            "expire_date": None,
+                            "error_message": str(e)
+                    })
+                    else:
+                        result.append({
+                            "hostname": clean_host,
+                            "port": port,
+                            "days_remaining": None,
+                            "issuer_name": None,
+                            "expire_date": None,
+                            "error_message": str(e)
+                    })
+        
+        print(result)
             
 
 if __name__ == "__main__":
