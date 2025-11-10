@@ -67,7 +67,7 @@ def parse_arguments():
     )
     
     parser.add_argument('hostname', nargs='?', help='Hostname to check')
-    parser.add_argument('port', nargs='?', type=int, default=443, help='Port number (default: 443)')
+    parser.add_argument('port', nargs='?', type=int, help='Port number (default: 443)')
     parser.add_argument('--domains', help='Comma-separated list of domains to check')
     parser.add_argument('--port', dest='port_flag', type=int, help='Port for all domains')
     parser.add_argument('--config', help='Path to configuration YAML file')
@@ -90,50 +90,45 @@ def loadconfig(configfile):
     return config
 
 
-def collect_results(config, timeout):     
-        config = loadconfig(config)
-        result = []
-        for domain in config['domains']:
-            hostname = domain['hostname']
-            port = domain.get('port', config.get('default_port'))
-            clean_host = clean_hostname(hostname)
-            
-            try:
-                cert_data = get_cert(clean_host, int(port), timeout)
-
-                result.append({
-                    "hostname": clean_host,
-                    "port": port,
-                    "days_remaining": cert_data["days_remaining"],
-                    "status": status.determine_status(cert_data["days_remaining"]),
-                    "issuer_name": cert_data["issuer_name"],
-                    "expire_date": cert_data["expiry_date"],
-                    "error_message": None
-                })
-            except (ssl.SSLError, socket.gaierror, ConnectionRefusedError, TimeoutError) as e:
-                    error_msg = str(e).lower()
-                    if 'expired' in error_msg or 'certificate has expired' in error_msg:
-                        result.append({
-                            "hostname": clean_host,
-                            "port": port,
-                            "days_remaining": None,
-                            "status": 'EXPIRED',
-                            "issuer_name": None,
-                            "expire_date": None,
-                            "error_message": str(e)
-                    })
-                    else:
-                        result.append({
-                            "hostname": clean_host,
-                            "port": port,
-                            "days_remaining": None,
-                            "status": 'ERROR',
-                            "issuer_name": None,
-                            "expire_date": None,
-                            "error_message": str(e)
-                    })
+def process_domains(domains_list, port, timeout):
+    """Process a list of domains and return formatted results."""
+    
+    results = []    
+    for domain_info in domains_list:
+        # domain_info could be just a hostname string, or a dict with hostname/port
+        if isinstance(domain_info, dict):
+            hostname = domain_info['hostname']
+            domain_port = domain_info.get('port', port)
+        else:
+            hostname = domain_info
+            domain_port = port
         
-        return print(formatter.format_as_table(result))
+        clean_host = clean_hostname(hostname)
+        
+        try:
+            cert_data = get_cert(clean_host, domain_port, timeout)
+            results.append({
+                "hostname": clean_host,
+                "port": domain_port,
+                "days_remaining": cert_data["days_remaining"],
+                "status": status.determine_status(cert_data["days_remaining"]),
+                "issuer_name": cert_data["issuer_name"],
+                "expire_date": cert_data["expiry_date"],
+                "error_message": None
+            })
+        except (ssl.SSLError, socket.gaierror, ConnectionRefusedError, TimeoutError) as e:
+            error_msg = str(e).lower()
+            results.append({
+                "hostname": clean_host,
+                "port": domain_port,
+                "days_remaining": None,
+                "status": 'EXPIRED' if 'expired' in error_msg else 'ERROR',
+                "issuer_name": None,
+                "expire_date": None,
+                "error_message": str(e)
+            })
+    
+    return formatter.format_as_table(results)
             
 
 if __name__ == "__main__":
@@ -143,32 +138,43 @@ if __name__ == "__main__":
     # Set socket timeout
     timeout = args.timeout if args.timeout else 15
     
-    # If config file is provided, use it
-    if args.config:
-        collect_results(args.config, timeout)
-        sys.exit(0)    
     # Determine port to use
-    port = args.port_flag if args.port_flag else args.port
+    port = args.port_flag or args.port or 443
     
     # Validate port
     if not (1 <= port <= 65535):
         print("Error: Port must be between 1 and 65535")
         sys.exit(1)
         
-    # Determine which domains to check
-    if args.domains:
-        # Multiple domains mode
+
+    # Configuration file mode
+    if args.config:
+        print("Loading domains from config file...")
+        config = loadconfig(args.config)
+        default_port = config.get('default_port', 443)
+        print(process_domains(config['domains'], default_port, timeout))
+        sys.exit(0)   
+    
+    # Multiple domains mode
+    elif args.domains:
         domains = [d.strip() for d in args.domains.split(',')]
+        print(process_domains(domains, port, timeout))
+        sys.exit(0)
+        
+    # Single domain mode (backward compatible)
     elif args.hostname:
-        # Single domain mode (backward compatible)
+       
         domains = [args.hostname]
+        print(process_domains(domains, port, timeout))
+        sys.exit(0)
+
+    # No valid input provided
     else:
         print("Error: No hostname or domains specified")
-        print(f"Usage: {sys.argv[0]} <hostname> <port> OR --domains <domain1,domain2> --port <port>")
+        print("Not config file provided")
+        print(f"Usage: {sys.argv[0]} <hostname> <port> OR --domains <domain1,domain2> --port <port> OR --config <configfile>")
         sys.exit(1)
-    
-    for domain in domains:
-        clean_host = clean_hostname(domain)
-        result = get_cert(clean_host, int(port), timeout)
         
+
+            
         
