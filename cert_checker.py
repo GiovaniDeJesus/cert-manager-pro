@@ -1,7 +1,7 @@
 #version 1.0
 
 from datetime import datetime, UTC
-import socket, ssl, sys, argparse, yaml
+import socket, ssl, sys, argparse, yaml, status, formatter
 
 
 def clean_hostname(hostname):
@@ -61,6 +61,9 @@ def parse_arguments():
         epilog='Examples:\n'
                '  %(prog)s google.com 443\n'
                '  %(prog)s --domains google.com,github.com --port 443\n'
+               '  %(prog)s --config config.yaml\n'
+               '  %(prog)s example.com --timeout 10'
+               
     )
     
     parser.add_argument('hostname', nargs='?', help='Hostname to check')
@@ -102,6 +105,7 @@ def collect_results(config, timeout):
                     "hostname": clean_host,
                     "port": port,
                     "days_remaining": cert_data["days_remaining"],
+                    "status": status.determine_status(cert_data["days_remaining"]),
                     "issuer_name": cert_data["issuer_name"],
                     "expire_date": cert_data["expiry_date"],
                     "error_message": None
@@ -112,7 +116,8 @@ def collect_results(config, timeout):
                         result.append({
                             "hostname": clean_host,
                             "port": port,
-                            "days_remaining": "expired",
+                            "days_remaining": None,
+                            "status": 'EXPIRED',
                             "issuer_name": None,
                             "expire_date": None,
                             "error_message": str(e)
@@ -122,12 +127,13 @@ def collect_results(config, timeout):
                             "hostname": clean_host,
                             "port": port,
                             "days_remaining": None,
+                            "status": 'ERROR',
                             "issuer_name": None,
                             "expire_date": None,
                             "error_message": str(e)
                     })
         
-        print(result)
+        return print(formatter.format_as_table(result))
             
 
 if __name__ == "__main__":
@@ -165,6 +171,4 @@ if __name__ == "__main__":
         clean_host = clean_hostname(domain)
         result = get_cert(clean_host, int(port), timeout)
         
-        if result is not None: #If there is not errors it will print the result
-            print(f"{domain}: {result['days_remaining']}")
         

@@ -8,14 +8,9 @@ def determine_status(days_remaining):
         days_remaining: int or None if error occurred
     
     Returns:
-        str: 'OK', 'WARNING', 'CRITICAL', 'ERROR', or 'EXPIRED'
+        str: 'OK', 'WARNING', 'CRITICAL'
     """
-    if days_remaining is None:
-        return 'ERROR'
-    
-    if days_remaining == 'expired':
-        return 'EXPIRED'
-    
+
     if days_remaining < 7:
         return 'CRITICAL'
     
