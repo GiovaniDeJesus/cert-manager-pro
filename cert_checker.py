@@ -62,17 +62,17 @@ def parse_arguments():
                '  %(prog)s --domains google.com,github.com --port 443\n'
                '  %(prog)s --config config.yaml\n'
                '  %(prog)s example.com --timeout 10'
+               '  %(prog)s example.com --format json --output results.json'
                
     )
     
-    parser.add_argument('hostname', nargs='?', help='Hostname to check')
-    parser.add_argument('port', nargs='?', type=int, help='Port number (default: 443)')
     parser.add_argument('--domains', help='Comma-separated list of domains to check')
     parser.add_argument('--port', dest='port_flag', type=int, help='Port for all domains')
     parser.add_argument('--config', help='Path to configuration YAML file')
     parser.add_argument('--timeout', type=int, help='Socket timeout in seconds (default: 15)')
     parser.add_argument('--version', action='version', version='cert_checker 1.0')
-    
+    parser.add_argument('--format', choices=['table', 'json', 'csv'], default='table', help='Output format')
+    parser.add_argument('--output', help='Output filename (for json/csv formats)')
     return parser.parse_args()
 
 def loadconfig(configfile):
@@ -127,7 +127,7 @@ def process_domains(domains_list, port, timeout):
                 "error_message": str(e)
             })
     
-    return formatter.format_as_table(results)
+    return results
             
 
 if __name__ == "__main__":
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     timeout = args.timeout if args.timeout else 15
     
     # Determine port to use
-    port = args.port_flag or args.port or 443
+    port = args.port_flag or 443
     
     # Validate port
     if not (1 <= port <= 65535):
@@ -151,27 +151,40 @@ if __name__ == "__main__":
         print("Loading domains from config file...")
         config = loadconfig(args.config)
         default_port = config.get('default_port', 443)
-        print(process_domains(config['domains'], default_port, timeout))
+        results = process_domains(config['domains'], default_port, timeout)
+        
+        if args.format == 'json':
+            filename = args.output or 'results.json'
+            output = formatter.format_as_json(results, filename)
+        elif args.format == 'csv':
+            filename = args.output or 'results.csv'
+            output = formatter.format_as_csv(results, filename)
+        else:
+            output = formatter.format_as_table(results)
+            print(output)
         sys.exit(0)   
     
     # Multiple domains mode
     elif args.domains:
         domains = [d.strip() for d in args.domains.split(',')]
-        print(process_domains(domains, port, timeout))
+        results = process_domains(domains, port, timeout)
+        if args.format == 'json':
+            filename = args.output or 'results.json'
+            output = formatter.format_as_json(results, filename)
+        elif args.format == 'csv':
+            filename = args.output or 'results.csv'
+            output = formatter.format_as_csv(results, filename)
+        else:
+            output = formatter.format_as_table(results)
+            print(output)
+        
         sys.exit(0)
         
-    # Single domain mode (backward compatible)
-    elif args.hostname:
-       
-        domains = [args.hostname]
-        print(process_domains(domains, port, timeout))
-        sys.exit(0)
-
     # No valid input provided
     else:
         print("Error: No hostname or domains specified")
         print("Not config file provided")
-        print(f"Usage: {sys.argv[0]} <hostname> <port> OR --domains <domain1,domain2> --port <port> OR --config <configfile>")
+        print(f"Usage: {sys.argv[0]} <hostname> <port> OR --domains <domain1,domain2> --port <port> OR --config <configfile> [--format <format>] [--output <filename>]")
         sys.exit(1)
         
 

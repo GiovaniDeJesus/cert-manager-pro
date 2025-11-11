@@ -1,4 +1,57 @@
+import json
+import csv
 from tabulate import tabulate
+
+def format_as_json(results, filename):
+    """
+    Save certificate check results as JSON file.
+    
+    Args:
+        results: List of result dictionaries
+        filename: Output filename (default: results.json)
+    
+    Returns:
+        str: Success message
+    """
+    with open(filename, 'w') as f:
+        json.dump(results, f, indent=2)
+    
+    return f"Results saved to {filename}"
+
+
+def format_as_csv(results, filename):
+    """
+    Save certificate check results as CSV file.
+    
+    Args:
+        results: List of result dictionaries
+        filename: Output filename (default: results.csv)
+    
+    Returns:
+        str: Success message
+    """
+    
+    fieldnames = ['hostname', 'port', 'status', 'days_remaining', 'expire_date', 'issuer_name', 'error_message']
+    
+    with open(filename, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        for result in results:
+            # Handle None values - convert to empty string for CSV
+            row = {
+                'hostname': result.get('hostname', ''),
+                'port': result.get('port', ''),
+                'status': result.get('status', ''),
+                'days_remaining': result.get('days_remaining', ''),
+                'expire_date': result.get('expire_date', ''),
+                'issuer_name': result.get('issuer_name', ''),
+                'error_message': result.get('error_message', '')
+            }
+            writer.writerow(row)
+    
+    return f"Results saved to {filename}"
+
 
 def format_as_table(results):
     """
