@@ -1,0 +1,26 @@
+# config-test.yaml - For testing error handling
+domains:
+  # Valid certificates (should work)
+  - hostname: google.com
+    port: 443
+  
+  - hostname: github.com
+    port: 443
+  
+  # Expired certificate (should fail with SSL error)
+  - hostname: expired.badssl.com
+    port: 443
+  
+  # Wrong hostname (should fail)
+  - hostname: wrong.host.badssl.com
+    port: 443
+  
+  # Self-signed (should fail)
+  - hostname: self-signed.badssl.com
+    port: 443
+  
+  # Untrusted root (should fail)
+  - hostname: untrusted-root.badssl.com
+    port: 443
+
+default_port: 443

@@ -10,109 +10,153 @@ I started with a bash script for basic certificate checking, but realized Python
 
 ## Current Status
 
-This is a command-line tool that checks SSL certificates and reports time remaining until expiration.
+Command-line tool that checks SSL certificates across multiple domains and provides detailed status reports with professional tabular output.
 
-### What Works Now
+### Features
 
-- Check any SSL certificate expiration date
-- Input cleaning (strips `https://`, trailing slashes, handles mixed case)
-- Network error handling (DNS failures, timeouts, connection refused)
-- SSL error detection (expired certificates, validation failures)
-- Clear command-line interface with proper validation
+- Multi-domain monitoring with YAML configuration files
+- Certificate information extraction: expiration dates, issuer identification, days remaining
+- Status determination: OK/WARNING/CRITICAL/EXPIRED/ERROR states
+- Professional tabular output with grid formatting via `tabulate` library
+- Modular architecture: separated business logic, presentation logic, and core functionality
+- Robust error handling: distinguishes between expired certificates, SSL validation failures, network errors, and timeouts
+- Input flexibility: command-line arguments, comma-separated lists, or YAML config files
+- Smart formatting: only displays non-standard ports, truncates long error messages
+- Input cleaning: strips `https://`, trailing slashes, handles mixed case
+
+### Project Structure
+
+```
+cert-monitor-pro/
+├── cert_checker.py              # Core certificate checking logic and CLI
+├── status.py                    # Business logic for status determination
+├── formatter.py                 # Presentation logic for table formatting
+├── configuration_example.yaml   # Sample configuration
+├── requirements.txt             # Python dependencies
+└── README.md                    # This file
+```
 
 ### Usage
 
+**Configuration file (recommended for production):**
 ```bash
-python cert_checker.py google.com 443
-# Output: 67 days, 12:48:30.976882
-
-python cert_checker.py expired.badssl.com 443  
-# Output: Error: SSL error for 'expired.badssl.com': certificate has expired
-
-python cert_checker.py https://GITHUB.COM/ 443
-# Output: 89 days, 3:22:15.123456
+python cert_checker.py --config config.yaml
 ```
 
-The tool handles various input formats and provides clear error messages when things fail.
+**Multiple domains via command-line:**
+```bash
+python cert_checker.py --domains google.com,github.com,example.com --port 443
+```
 
-## Architecture Overview
+**Custom timeout:**
+```bash
+python cert_checker.py --config config.yaml --timeout 30
+```
 
-The tool follows a complete certificate management lifecycle:
+**Sample output:**
+```
++-----------------------+----------+------------+------------+------------------+--------------------------------+
+| Domain                | Status   | Days Left  | Expires    | Issuer           | Error                          |
++=======================+==========+============+============+==================+================================+
+| google.com            | OK       | 67         | 2025-01-18 | Google Trust ... | -                              |
++-----------------------+----------+------------+------------+------------------+--------------------------------+
+| github.com            | OK       | 89         | 2025-02-09 | DigiCert Inc     | -                              |
++-----------------------+----------+------------+------------+------------------+--------------------------------+
+| expired.badssl.com    | EXPIRED  | -          | -          | -                | certificate has expired        |
++-----------------------+----------+------------+------------+------------------+--------------------------------+
+| wrong.host.badssl.com | ERROR    | -          | -          | -                | Hostname mismatch              |
++-----------------------+----------+------------+------------+------------------+--------------------------------+
+```
+
+### Configuration File Format
+
+```yaml
+domains:
+  - hostname: google.com
+    port: 443
+  
+  - hostname: example.com
+    port: 8443
+  
+  - hostname: internal-service.local
+    # port defaults to default_port
+
+default_port: 443
+```
+
+## Architecture
+
+### Current Modular Design
+
+Three-layer architecture with clear separation of concerns:
+
+- **cert_checker.py**: Core certificate retrieval, input handling, and orchestration
+- **status.py**: Business logic for determining certificate health status  
+- **formatter.py**: Presentation logic for table formatting and display
+
+This separation allows independent evolution - status thresholds can change without touching formatting code, and new output formats (JSON, CSV) can be added without modifying certificate checking logic.
+
+### Future Complete Lifecycle
+
+The tool is being built toward a comprehensive certificate management platform:
 
 ```mermaid
-graph TD
-    A[Infrastructure Discovery] --> B[Certificate Monitoring]
+graph LR
+    subgraph Monitor
+        A[Scan Infrastructure] --> B[Check Certificates]
+        B --> C{Days Until Expiry}
+    end
     
-    B --> C{Certificate Status}
-    C -->|Valid| D[Schedule Next Check]
-    C -->|Warning 30 days| E[Send Alert]
-    C -->|Critical 7 days| F[Urgent Alert]
-    C -->|Expired| G[Emergency Alert]
+    subgraph Alert
+        C -->|30+ days| D[OK - Schedule Next Check]
+        C -->|7-30 days| E[Warning Alert]
+        C -->|0-7 days| F[Critical Alert]
+        C -->|Expired| G[Emergency Alert]
+    end
     
-    E --> H[Renewal Decision]
-    F --> H
-    G --> H
+    subgraph Renew
+        E --> H[Trigger Renewal]
+        F --> H
+        G --> H
+        H --> I[Let's Encrypt]
+        H --> J[Commercial CA API]
+        H --> K[Manual Process]
+    end
     
-    H --> I{Renewal Method}
-    I -->|Let's Encrypt| J[Automated Renewal]
-    I -->|Commercial CA| K[API-Based Renewal]
-    I -->|Manual Process| L[Workflow Support]
+    subgraph Deploy
+        I --> L[New Certificate]
+        J --> L
+        K --> L
+        L --> M[AWS/GCP/Azure]
+        L --> N[On-Premise Servers]
+        L --> O[CDN/Load Balancers]
+    end
     
-    J --> M[Certificate Obtained]
-    K --> M
-    L --> M
+    subgraph Track
+        M --> P[Verify Deployment]
+        N --> P
+        O --> P
+        P --> Q[Update Database]
+        Q --> R[Compliance Report]
+    end
     
-    M --> N{Deployment Targets}
-    N -->|AWS| O[CloudFront/ALB]
-    N -->|GCP| P[Load Balancer]
-    N -->|Azure| Q[Application Gateway]
-    N -->|On-Premise| R[Web Servers]
-    N -->|CDN| S[Content Delivery]
-    
-    O --> T[Verify Deployment]
-    P --> T
-    Q --> T
-    R --> T
-    S --> T
-    
-    T --> U[Update Certificate Database]
-    U --> V[Generate Compliance Report]
-    V --> W[Archive Old Certificate]
-    W --> D
-    
+    R --> D
     D --> B
-    
-    subgraph "Alert Channels"
-        E --> E1[Email]
-        F --> F1[Slack/Teams]
-        G --> G1[PagerDuty/SMS]
-        E --> E2[Dashboard]
-        F --> E2
-        G --> E2
-    end
-    
-    subgraph "Tracking & Compliance"
-        U --> U1[Certificate History]
-        V --> V1[Audit Logs]
-        W --> W1[Retention Policy]
-        U1 --> U2[Expiry Trends]
-        V1 --> V2[Compliance Status]
-    end
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
-    style J fill:#e8f5e8
-    style T fill:#fff3e0
-    style V fill:#fce4ec
+    style I fill:#e8f5e8
+    style P fill:#fff3e0
+    style R fill:#fce4ec
 ```
 
-This diagram shows the five core phases: Monitor → Alert → Renew → Deploy → Track, with supporting systems for notifications and compliance.
+Five core phases: Monitor → Alert → Renew → Deploy → Track
 
 ## Development Approach
 
 Each development phase is analyzed with SonarQube to maintain code quality and catch potential issues. This ensures the codebase stays maintainable as features are added and provides objective metrics for improvement.
 
-The focus is on building secure, well-tested code that handles certificates and credentials properly. Security tooling is added progressively:
+Security tooling is added progressively:
 - Code quality analysis with SonarQube
 - Dependency scanning with pip-audit or safety
 - Web security testing (OWASP ZAP) when web components are added
@@ -120,19 +164,34 @@ The focus is on building secure, well-tested code that handles certificates and 
 
 ## Development Roadmap
 
-### Phase 1: Foundation (Complete)
+### Phase 1: Foundation ✅
 - Basic certificate checking
 - Error handling and input validation
 - Command-line interface
 - Code quality baseline
 
-### Phase 2: Multi-Domain Support
-- Check multiple certificates simultaneously
-- YAML configuration file support
-- Tabular output with status indicators
-- Enhanced command-line options
+### Phase 2: Multi-Domain Support 
 
-### Phase 3: Automation
+**Part 1 ✅**
+- Multi-domain certificate checking
+- YAML configuration file support
+- Command-line interface enhancements
+- Input validation and error handling
+
+**Part 2 ✅**
+- Issuer information extraction from certificates
+- Status determination logic (OK/WARNING/CRITICAL)
+- Tabular output formatting with grid layout
+- Proper error categorization (EXPIRED vs ERROR)
+- Code architecture improvements
+
+**Part 3**
+- JSON export format for programmatic access
+- CSV export format for spreadsheet analysis
+- Enhanced command-line options for export formats
+
+### Phase 3: Automation (In Progress)
+- Data persistence preparation
 - Scheduled monitoring
 - Let's Encrypt integration for automated renewal
 - Email and webhook notifications
@@ -158,7 +217,7 @@ The focus is on building secure, well-tested code that handles certificates and 
 
 ## The Big Picture
 
-The goal is a comprehensive SSL certificate management platform handling the complete lifecycle:
+Comprehensive SSL certificate management platform handling the complete lifecycle:
 
 1. **Monitor** certificates across infrastructure
 2. **Alert** when certificates approach expiry
@@ -181,7 +240,12 @@ Commercial CA automation is available for organizations using API-enabled certif
 ## Requirements
 
 - Python 3.12+
-- No external dependencies (current version uses built-in libraries only)
+- tabulate 0.8.10+
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
 ## License
 
