@@ -36,9 +36,8 @@ def parse_certificate_info(cert):
     expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
     now = datetime.now(UTC)
     delta = expiry.replace(tzinfo=UTC) - now
-    
     # Extract issuer information
-    issuer = dict(x[0] for x in cert['issuer'])
+    issuer = {key: value for ((key, value),) in cert['issuer']}
     issuer_org = issuer.get('organizationName', None)
     issuer_cn = issuer.get('commonName', None)
 
