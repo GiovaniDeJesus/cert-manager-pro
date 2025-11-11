@@ -170,7 +170,7 @@ Security tooling is added progressively:
 - Command-line interface
 - Code quality baseline
 
-### Phase 2: Multi-Domain Support (In Progress)
+### Phase 2: Multi-Domain Support 
 
 **Part 1 ✅**
 - Multi-domain certificate checking
@@ -189,9 +189,9 @@ Security tooling is added progressively:
 - JSON export format for programmatic access
 - CSV export format for spreadsheet analysis
 - Enhanced command-line options for export formats
-- Data persistence preparation
 
-### Phase 3: Automation
+### Phase 3: Automation (In Progress)
+- Data persistence preparation
 - Scheduled monitoring
 - Let's Encrypt integration for automated renewal
 - Email and webhook notifications
