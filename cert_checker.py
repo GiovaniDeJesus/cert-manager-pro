@@ -171,9 +171,11 @@ if __name__ == "__main__":
         if args.format == 'json':
             filename = args.output or 'results.json'
             output = formatter.format_as_json(results, filename)
+            print(output)
         elif args.format == 'csv':
             filename = args.output or 'results.csv'
             output = formatter.format_as_csv(results, filename)
+            print(output)
         else:
             output = formatter.format_as_table(results)
             print(output)
@@ -184,7 +186,7 @@ if __name__ == "__main__":
     else:
         print("Error: No hostname or domains specified")
         print("Not config file provided")
-        print(f"Usage: {sys.argv[0]} <hostname> <port> OR --domains <domain1,domain2> --port <port> OR --config <configfile> [--format <format>] [--output <filename>]")
+        print(f"Usage: {sys.argv[0]} --domains <domain1,domain2> [--port <port>] OR --config <configfile> [--format table|json|csv] [--output <filename>]")
         sys.exit(1)
         
 
