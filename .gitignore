@@ -3,3 +3,4 @@ __pycache__/
 sonar-project.properties
 *.json
 *.csv
+*.db

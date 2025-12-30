@@ -29,7 +29,7 @@ def get_cert(hostname, port, timeout=15):
     
 
 def parse_certificate_info(cert):
-    """Calculates time remaining until certificate expires."""
+    """Calculates time remaining until certificate expires and extracts data."""
     not_after = cert["notAfter"]
 
    # Certificate dates are in GMT format: "Dec 31 23:59:59 2024 GMT"
