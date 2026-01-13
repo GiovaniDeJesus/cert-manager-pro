@@ -12,28 +12,33 @@ class CertDatabase:
     """
     
     def __init__(self, db_path='certs.db'):
-        """
-        Initialize database and create tables if needed.
-        
-        Args:
-            db_path: Path to SQLite database file
-        """
         self.db_path = db_path
+        self._persistent_conn = None
+        
+        # If using in-memory, keep connection alive
+        if db_path == ':memory:':
+            self._persistent_conn = self._get_connection()
+        
         self._init_database()
     
     def _get_connection(self):
-        """
-        Create a new database connection with proper settings.
+        """Get database connection - reuse for in-memory databases."""
+        # If we have a persistent connection (in-memory), use it
+        if self._persistent_conn is not None:
+            return self._persistent_conn
         
-        Returns:
-            sqlite3.Connection: Database connection with Row factory
-        """
+        # Otherwise create new connection (file-based)
         conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
-        # Enable foreign key constraints
         conn.execute('PRAGMA foreign_keys = ON')
         return conn
     
+    def close(self):
+        """Close persistent connection if exists."""
+        if self._persistent_conn is not None:
+            self._persistent_conn.close()
+            self._persistent_conn = None
+            
     def _init_database(self):
         """Create tables and indexes if they don't exist."""
         with self._get_connection() as conn:
