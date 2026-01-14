@@ -1,6 +1,6 @@
 *.pyc
 __pycache__/
-sonar-project.properties
 *.json
 *.csv
 *.db
+*.env
