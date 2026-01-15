@@ -250,3 +250,5 @@ pip install -r requirements.txt
 ## License
 
 MIT License - See LICENSE file for details.
+
+[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-dark.svg)](https://sonarcloud.io/summary/new_code?id=GiovaniDeJesus_cert-manager-pro)
