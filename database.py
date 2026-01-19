@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+from alert_rules import should_alert 
 
 
 class CertDatabase:
@@ -103,6 +104,11 @@ class CertDatabase:
     # ========================================
     # GENERIC READ METHODS
     # ========================================
+    def _row_to_dict(self, row):
+        """Convert sqlite3.Row to dictionary."""
+        if row is None:
+            return None
+        return dict(row) 
     
     def query(self, sql, params=()):
         """
@@ -139,7 +145,10 @@ class CertDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, params)
-            return cursor.fetchall()
+            rows = cursor.fetchall()
+            return [self._row_to_dict(row) for row in rows]
+        
+
     
     def query_one(self, sql, params=()):
         """
@@ -166,7 +175,8 @@ class CertDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, params)
-            return cursor.fetchone()
+            row = cursor.fetchone()
+            return self._row_to_dict(row)
     
     # ========================================
     # ATOMIC WRITE METHOD
@@ -365,7 +375,7 @@ class CertDatabase:
                         result['events_logged'].append('STATUS_CHANGE')
                         
                         # Check if should alert (status got worse + not alerted recently)
-                        if self._should_alert(existing_cert['status'], cert_data.get('status')):
+                        if should_alert(existing_cert['status'], cert_data.get('status')):
                             cursor.execute('''
                                 SELECT COUNT(*) FROM alerts
                                 WHERE cert_id = ? 
@@ -433,136 +443,5 @@ class CertDatabase:
                 conn.rollback()
                 raise Exception(f"Database error for {hostname}:{port}: {e}")
     
-    def _should_alert(self, old_status, new_status):
-        """
-        Determine if status change warrants an alert.
-        Only alert if status got WORSE (severity increased).
-        
-        Internal helper method for process_certificate_check().
-        """
-        status_severity = {
-            'OK': 0,
-            'WARNING': 1,
-            'CRITICAL': 2,
-            'EXPIRED': 3,
-            'ERROR': 3
-        }
-        
-        old_severity = status_severity.get(old_status, 0)
-        new_severity = status_severity.get(new_status, 0)
-        
-        return new_severity > old_severity
-
-
-# ========================================
-# Test the database if run directly
-# ========================================
-if __name__ == '__main__':
-    print("Testing Simplified Database")
-    print("=" * 60)
+    # ========================================
     
-    db = CertDatabase('test_simple.db')
-    print("✓ Database created")
-    
-    # Test 1: Generic query (empty database)
-    print("\n--- Test 1: Query Empty Database ---")
-    certs = db.query('SELECT * FROM certificates')
-    print(f"Certificates found: {len(certs)}")
-    
-    # Test 2: Insert new certificate
-    print("\n--- Test 2: Insert New Certificate ---")
-    result = db.process_certificate_check(
-        'google.com',
-        443,
-        {
-            'days_remaining': 67,
-            'status': 'OK',
-            'issuer_name': 'Google Trust Services',
-            'expire_date': '2025-03-15',
-            'error_message': None
-        },
-        existing_cert=None
-    )
-    print(f"Action: {result['action']}")
-    print(f"Cert ID: {result['cert_id']}")
-    print(f"Events: {result['events_logged']}")
-    
-    # Test 3: Query the certificate we just inserted
-    print("\n--- Test 3: Query Inserted Certificate ---")
-    cert = db.query_one(
-        'SELECT * FROM certificates WHERE hostname = ? AND port = ?',
-        ('google.com', 443)
-    )
-    print(f"Hostname: {cert['hostname']}")
-    print(f"Status: {cert['status']}")
-    print(f"Days remaining: {cert['days_remaining']}")
-    
-    # Test 4: Update with status change
-    print("\n--- Test 4: Update Certificate (Status Change) ---")
-    result = db.process_certificate_check(
-        'google.com',
-        443,
-        {
-            'days_remaining': 25,
-            'status': 'WARNING',
-            'issuer_name': 'Google Trust Services',
-            'expire_date': '2025-03-15',
-            'error_message': None
-        },
-        existing_cert=cert
-    )
-    print(f"Action: {result['action']}")
-    print(f"Events: {result['events_logged']}")
-    print(f"Alerts: {result['alerts_recorded']}")
-    
-    # Test 5: Query all certificates
-    print("\n--- Test 5: Query All Certificates ---")
-    all_certs = db.query('SELECT * FROM certificates ORDER BY days_remaining ASC')
-    print(f"Total certificates: {len(all_certs)}")
-    for c in all_certs:
-        print(f"  {c['hostname']}:{c['port']} - {c['status']} ({c['days_remaining']} days)")
-    
-    # Test 6: Query events
-    print("\n--- Test 6: Query Events ---")
-    events = db.query('''
-        SELECT e.*, c.hostname, c.port
-        FROM events e
-        JOIN certificates c ON e.cert_id = c.id
-        ORDER BY e.detected_at DESC
-    ''')
-    print(f"Total events: {len(events)}")
-    for e in events:
-        print(f"  {e['hostname']}:{e['port']} - {e['event_type']} ({e['old_value']} → {e['new_value']})")
-    
-    # Test 7: Query alerts
-    print("\n--- Test 7: Query Alerts ---")
-    alerts = db.query('''
-        SELECT a.*, c.hostname, c.port
-        FROM alerts a
-        JOIN certificates c ON a.cert_id = c.id
-        WHERE a.acknowledged = 0
-        ORDER BY a.sent_at DESC
-    ''')
-    print(f"Unacknowledged alerts: {len(alerts)}")
-    for a in alerts:
-        print(f"  {a['hostname']}:{a['port']} - {a['alert_type']}: {a['message']}")
-    
-    # Test 8: Filter by status
-    print("\n--- Test 8: Filter by Status ---")
-    warnings = db.query('SELECT * FROM certificates WHERE status = ?', ('WARNING',))
-    print(f"WARNING certificates: {len(warnings)}")
-    
-    # Test 9: Count query
-    print("\n--- Test 9: Count Query ---")
-    count_result = db.query_one('SELECT COUNT(*) as count FROM certificates')
-    print(f"Total certificates in database: {count_result['count']}")
-    
-    print("\n" + "=" * 60)
-    print("✅ All tests passed!")
-    print("\nDatabase has just 6 methods:")
-    print("  1. __init__() - Setup")
-    print("  2. _get_connection() - Get connection")
-    print("  3. _init_database() - Create tables")
-    print("  4. query() - Read multiple rows")
-    print("  5. query_one() - Read one row")
-    print("  6. process_certificate_check() - Atomic write")

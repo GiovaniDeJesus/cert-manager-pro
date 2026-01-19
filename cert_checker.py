@@ -5,6 +5,7 @@ from datetime import datetime, UTC
 import socket, ssl, sys, argparse, yaml
 import status, formatter
 from database import CertDatabase
+import alerts
 
 
 def clean_hostname(hostname):
@@ -86,24 +87,6 @@ def loadconfig(configfile):
     return config
 
 
-def should_alert(old_status, new_status):
-    """
-    Determine if status change warrants an alert.
-    Only alert if status got WORSE (severity increased).
-    """
-    status_severity = {
-        'OK': 0,
-        'WARNING': 1,
-        'CRITICAL': 2,
-        'EXPIRED': 3,
-        'ERROR': 3
-    }
-    
-    old_severity = status_severity.get(old_status, 0)
-    new_severity = status_severity.get(new_status, 0)
-    
-    return new_severity > old_severity
-
 
 def check_and_store_certificate(hostname, port, timeout, db):
     """
@@ -132,20 +115,34 @@ def check_and_store_certificate(hostname, port, timeout, db):
             (clean_host, port)
         )
         
-        # Write/update certificate atomically
-        db.process_certificate_check(
-            clean_host,
-            port,
-            {
-                'days_remaining': days_remaining,
-                'status': current_status,
-                'issuer_name': cert_data['issuer_name'],
-                'expire_date': cert_data['expiry_date'],
-                'error_message': None
-            },
-            existing_cert=existing
+        db_result = db.process_certificate_check(
+        clean_host,
+        port,
+        {
+            'days_remaining': cert_data['days_remaining'],
+            'status': status.determine_status(cert_data['days_remaining']),
+            'issuer_name': cert_data['issuer_name'],
+            'expire_date': cert_data['expiry_date'],
+            'error_message': None
+        },
+        existing_cert=existing
         )
         
+        if db_result['alerts_recorded']:
+            print(f"Sending {len(db_result['alerts_recorded'])} alert(s) for {clean_host}")
+            
+            for alert_type in db_result['alerts_recorded']:
+                # Create alert data
+                alert_data = {
+                    'hostname': clean_host,
+                    'port': port,
+                    'days_remaining': days_remaining,
+                    'status': current_status,
+                    'issuer_name': cert_data['issuer_name'],
+                    'expire_date': cert_data['expiry_date'],
+                    'error_message': None
+                }
+            alerts.smtp_alert(alert_data, alert_type)
         # Return display result
         return {
             "hostname": clean_host,
@@ -157,7 +154,7 @@ def check_and_store_certificate(hostname, port, timeout, db):
             "error_message": None
         }
     
-    except (ssl.SSLError, socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as e:
+    except  OSError as e:
         # Error checking certificate
         error_msg = str(e)
         error_status = 'EXPIRED' if 'expired' in error_msg.lower() else 'ERROR'
@@ -168,8 +165,9 @@ def check_and_store_certificate(hostname, port, timeout, db):
             (clean_host, port)
         )
         
+        
         # Write error state atomically
-        db.process_certificate_check(
+        db_result = db.process_certificate_check(
             clean_host,
             port,
             {
@@ -181,7 +179,23 @@ def check_and_store_certificate(hostname, port, timeout, db):
             },
             existing_cert=existing
         )
-        
+  
+        if db_result['alerts_recorded']:
+            print(f"Sending error alert for {clean_host}")
+            
+            for alert_type in db_result['alerts_recorded']:
+                alert_data = {
+                    'hostname': clean_host,
+                    'port': port,
+                    'days_remaining': None,
+                    'status': error_status,
+                    'issuer_name': None,
+                    'expire_date': None,
+                    'error_message': error_msg
+                }
+
+                alerts.smtp_alert(alert_data, alert_type)        
+
         # Return error result
         return {
             "hostname": clean_host,
@@ -220,7 +234,7 @@ def process_domains(domains_list, default_port, timeout, db):
         
         result = check_and_store_certificate(hostname, port, timeout, db)
         results.append(result)
-    
+            
     return results
 
 
