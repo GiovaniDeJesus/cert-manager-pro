@@ -6,10 +6,13 @@ from cert_checker import (
     parse_certificate_info,
     process_domains,
     check_and_store_certificate,
-    should_alert
+
 )
 from status import determine_status
 from database import CertDatabase
+import alert_rules
+from alerts import EmailAlerter
+import time # Sleep to avoid SMTP rate limits
 
 
 # ===== Basic Function Tests =====
@@ -89,7 +92,7 @@ def test_database():
 ])
 def test_should_alert(old_status, new_status, should_alert_flag):
     """Test alert logic for status changes"""
-    assert should_alert(old_status, new_status) == should_alert_flag
+    assert alert_rules.should_alert(old_status, new_status) == should_alert_flag
 
 
 # ===== Database Integration Tests =====
@@ -237,3 +240,135 @@ def test_expired_certificate(test_database):
     assert len(results) == 1
     assert results[0]['status'] == 'EXPIRED'
     assert results[0]['error_message'] is not None
+    
+
+
+
+# ===== Email Alert Tests =====
+alerter = EmailAlerter()
+
+def test_email_alerter_initialization():
+    """Test EmailAlerter can be initialized with .env credentials."""
+    try:
+        assert alerter.smtp_server is not None, "SMTP_HOST not configured"
+        assert alerter.username is not None, "SMTP_USER not configured"
+        assert alerter.password is not None, "SMTP_PASSWORD not configured"
+        assert alerter.sender_email is not None, "SMTP_TO_EMAIL not configured"
+        assert alerter.receiver_email is not None, "SMTP_FROM_EMAIL not configured" 
+        assert alerter.smtp_port is not None, "SMTP_PORT not configured"
+        
+    except ValueError as e:
+        pytest.fail(f"EmailAlerter initialization failed: {e}")
+
+
+
+def test_send_critical_alert():
+    time.sleep(10)  # Sleep to avoid SMTP rate limits
+    """Test sending CRITICAL alert email."""
+    test_cert = {
+        'hostname': 'test-critical.example.com',
+        'port': 443,
+        'days_remaining': 3,
+        'status': 'CRITICAL',
+        'issuer_name': "Let's Encrypt",
+        'expire_date': '2025-01-22',
+        'error_message': None
+    }
+    
+    result = alerter.send_alert(test_cert, 'CRITICAL')
+    assert result is True, "CRITICAL alert failed to send"
+
+
+def test_send_warning_alert():
+    time.sleep(10)  # Sleep to avoid SMTP rate limits
+    """Test sending WARNING alert email."""
+    test_cert = {
+        'hostname': 'test-warning.example.com',
+        'port': 443,
+        'days_remaining': 20,
+        'status': 'WARNING',
+        'issuer_name': 'DigiCert',
+        'expire_date': '2025-02-08',
+        'error_message': None
+    }
+    
+    result = alerter.send_alert(test_cert, 'WARNING')
+    assert result is True, "WARNING alert failed to send"
+
+
+def test_send_expired_alert():
+    """Test sending EXPIRED alert email."""
+    time.sleep(10)  # Sleep to avoid SMTP rate limits
+    test_cert = {
+        'hostname': 'test-expired.example.com',
+        'port': 443,
+        'days_remaining': None,
+        'status': 'EXPIRED',
+        'issuer_name': None,
+        'expire_date': None,
+        'error_message': 'certificate has expired'
+    }
+    
+    result = alerter.send_alert(test_cert, 'EXPIRED')
+    assert result is True, "EXPIRED alert failed to send"
+
+
+def test_send_renewed_alert():
+    time.sleep(10)  # Sleep to avoid SMTP rate limits
+    """Test sending RENEWED alert email."""
+    test_cert = {
+        'hostname': 'test-renewed.example.com',
+        'port': 443,
+        'days_remaining': 90,
+        'status': 'OK',
+        'issuer_name': "Let's Encrypt",
+        'expire_date': '2025-04-20',
+        'error_message': None
+    }
+    
+    result = alerter.send_alert(test_cert, 'RENEWED')
+    assert result is True, "RENEWED alert failed to send"
+
+
+def test_alert_with_missing_data():
+    time.sleep(10)  # Sleep to avoid SMTP rate limits
+    """Test alert handles missing certificate data gracefully."""
+    test_cert = {
+        'hostname': 'test-incomplete.example.com',
+        'port': 443,
+        'days_remaining': None,
+        'status': 'ERROR',
+        'issuer_name': None,
+        'expire_date': None,
+        'error_message': 'Connection timeout'
+    }
+    
+    # Should not crash, even with missing data
+    result = alerter.send_alert(test_cert, 'ERROR')
+    assert result is True, "Alert with missing data failed"
+
+
+def test_multiple_alerts():
+    """Test sending multiple alerts in sequence."""
+    
+    certs = [
+        {
+            'hostname': f'test-multi-{i}.example.com',
+            'port': 443,
+            'days_remaining': 5 + i,
+            'status': 'CRITICAL',
+            'issuer_name': "Let's Encrypt",
+            'expire_date': '2025-01-25',
+            'error_message': None
+        }
+        for i in range(3) # Sleep to avoid SMTP rate limits
+    ]
+    
+    results = []
+    for cert in certs:
+        result = alerter.send_alert(cert, 'CRITICAL')
+        time.sleep(10)
+        results.append(result)
+    
+    assert all(results), f"Some alerts failed: {results.count(False)}/{len(results)}"
+    assert len(results) == 3, "Expected 3 alerts to be sent"
