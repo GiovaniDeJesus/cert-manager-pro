@@ -1,11 +1,8 @@
-# cert_checker.py
-# version 2.0 - Database Integration
-
 from datetime import datetime, UTC
 import socket, ssl, sys, argparse, yaml
 import status, formatter
 from database import CertDatabase
-import alerts
+from alerts import EmailAlerter
 
 
 def clean_hostname(hostname):
@@ -142,7 +139,7 @@ def check_and_store_certificate(hostname, port, timeout, db):
                     'expire_date': cert_data['expiry_date'],
                     'error_message': None
                 }
-            alerts.smtp_alert(alert_data, alert_type)
+            EmailAlerter().send_alert(alert_data, alert_type)
         # Return display result
         return {
             "hostname": clean_host,
@@ -194,7 +191,7 @@ def check_and_store_certificate(hostname, port, timeout, db):
                     'error_message': error_msg
                 }
 
-                alerts.smtp_alert(alert_data, alert_type)        
+                EmailAlerter().send_alert(alert_data, alert_type)        
 
         # Return error result
         return {
