@@ -24,3 +24,6 @@ domains:
     port: 443
 
 default_port: 443
+
+
+db_path: certs.db

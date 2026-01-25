@@ -55,17 +55,19 @@ def parse_certificate_info(cert):
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='SSL Certificate Expiration Checker with Database Integration',
+        description='SSL Certificate Expiration Checker',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='Examples:\n'
                '  %(prog)s --config config.yaml\n'
                '  %(prog)s --config config.yaml --db-path /custom/path/certs.db\n'
     )
     
-    parser.add_argument('--config', required=True, help='Path to configuration YAML file')
+    parser.add_argument('--config', help='Path to configuration YAML file')
     parser.add_argument('--timeout', type=int, default=15, help='Socket timeout in seconds (default: 15)')
     parser.add_argument('--db-path', default='certs.db', help='Path to database file (default: certs.db)')
     parser.add_argument('--version', action='version', version='cert_checker 2.0')
+    parser.add_argument('--domain', help='Single domain to check (overrides config file)')
+    parser.add_argument('--port', type=int, help='Port for single domain check (default: 443)')
     
     return parser.parse_args()
 
@@ -239,16 +241,17 @@ if __name__ == "__main__":
     
     args = parse_arguments()
     
-    # Initialize database
-    db = CertDatabase(args.db_path)
-    
+  
     # Load configuration
-    config = loadconfig(args.config)
+    config = loadconfig(args.config) if args.config else {}
     default_port = config.get('default_port', 443)
+    
+    # Initialize database
+    db = CertDatabase(config.get('db_path', args.db_path))
     
     # Process all domains
     results = process_domains(
-        config['domains'],
+        [args.domain] if args.domain else config['domains'],
         default_port,
         args.timeout,
         db
